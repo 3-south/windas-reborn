@@ -1,0 +1,25 @@
+{
+  "name": "windas-reborn",
+  "version": "0.1.0",
+  "description": "Modern, resizable replacement UI for the Sony WinDAS CRT monitor service tool (Web Serial)",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "test": "node --test",
+    "start": "node serve.js",
+    "dist": "electron-builder --win portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.github.windas-reborn",
+    "productName": "WinDAS Reborn",
+    "files": ["index.html", "src/**/*", "electron/**/*", "package.json"],
+    "win": { "target": "portable", "artifactName": "WinDAS-Reborn-${version}.exe" },
+    "directories": { "output": "dist" }
+  }
+}
