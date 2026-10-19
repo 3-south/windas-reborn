@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WinDAS pattern</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #hint { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #fff; background: #000a; font: 16px/1.4 "Segoe UI", sans-serif; padding: 14px 20px; border-radius: 8px; text-align: center; cursor: default; transition: opacity .6s; }
+    #hint.hide { opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="hint">Drag this window onto the CRT, then <b>click</b> (or press <b>F</b>) for full screen.<br>It will show whatever pattern WinDAS or HCFR asks for.</div>
+  <script type="module">
+    import { drawPattern, DEFAULT_SPEC } from './src/core/patterns.js';
+    const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+    let spec = { ...DEFAULT_SPEC, ire: 0 };
+    function paint() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
+      drawPattern(ctx, canvas.width, canvas.height, spec);
+    }
+    const ch = new BroadcastChannel('windas-pattern');
+    ch.onmessage = (e) => {
+      if (e.data?.type === 'pattern') { spec = e.data.spec; paint(); document.getElementById('hint').classList.add('hide'); }
+      if (e.data?.type === 'ping') ch.postMessage({ type: 'pong' });
+    };
+    addEventListener('resize', paint);
+    const full = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen(); };
+    addEventListener('click', full);
+    addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'f') full(); });
+    ch.postMessage({ type: 'pong' }); // tell the controller a pattern window is open
+    paint();
+  </script>
+</body>
+</html>

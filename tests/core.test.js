@@ -71,3 +71,15 @@ test('write then read back through the simulator (key tables)', opts, async () =
     assert.ok(tried > 100 && ok * 100 >= tried * 90, `${f}: ${ok}/${tried}`);
   }
 });
+
+test('session scripts decode and run (G1 chassis: Enter Factory ... Exit Factory)', opts, async () => {
+  const { runScript } = await import('../src/core/session.js');
+  const m = await loadModel(fsSource, '3536');
+  const names = (steps) => steps.map((s) => `${m.table.registers[m.table.abs(s.id)].name.trim()}=${s.value}`).join(', ');
+  assert.equal(names(m.chs.startScript), 'Enter Factory=-923, Exit Factory=0, Timer=1, !Key on/off=1');
+  assert.equal(names(m.chs.exitScript), '!Key on/off=0, Clear Warranty=0, Exit Factory=0, Timer=2');
+  const bus = new RegisterBus(new Executor(m.table, new SimLink(m.table)));
+  const r = await runScript(bus, m.chs.startScript, async () => {});
+  assert.deepEqual(r, { ok: true, message: 'OK' });
+  assert.equal((await runScript(bus, m.chs.exitScript, async () => {})).ok, true);
+});

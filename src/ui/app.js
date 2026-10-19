@@ -2,6 +2,8 @@ import { loadModel, loadModelList, folderSource } from '../core/model.js';
 import { Executor, Status } from '../core/executor.js';
 import { RegisterBus } from '../core/bus.js';
 import { SerialLink, SimLink } from '../core/links.js';
+import { runScript } from '../core/session.js';
+import { DEFAULT_SPEC, WINDAS_PATTERNS, drawPattern } from '../core/patterns.js';
 
 // ---------- tiny helpers ----------
 const $ = (s, r = document) => r.querySelector(s);
@@ -48,7 +50,7 @@ function setStatus() {
     : S.entry ? `${S.entry.name} loaded — not connected` : 'Not connected';
   $('#statusText').textContent = t;
   $('#dot').className = connected() ? 'on' : S.entry ? 'model' : '';
-  for (const b of document.querySelectorAll('#nav button')) b.disabled = b.dataset.page !== 'setup' && b.dataset.page !== 'log' && !S.model;
+  for (const b of document.querySelectorAll('#nav button')) b.disabled = !['setup', 'patterns', 'log'].includes(b.dataset.page) && !S.model;
 }
 
 // ---------- actions ----------
@@ -77,10 +79,15 @@ async function connect(simulated) {
   S.simulated = simulated;
   S.link = simulated ? new SimLink(S.model.table) : await SerialLink.request();
   S.bus = new RegisterBus(new Executor(S.model.table, S.link, addTrace));
+  // Same handshake WinDAS performs (e.g. "Enter Factory" on older chassis).
+  const r = await runScript(S.bus, S.model.chs.startScript);
+  if (!r.ok) { await disconnect(false); throw new Error(r.message); }
   setStatus();
 }
 
-async function disconnect() {
+async function disconnect(runExit = true) {
+  // Leave the monitor as WinDAS does (e.g. "Exit Factory") so its on-screen menu is not left locked.
+  if (runExit && S.bus && S.model) { try { await run(() => runScript(S.bus, S.model.chs.exitScript)); } catch { /* link may be gone */ } }
   if (S.link) await S.link.close();
   S.link = S.bus = null;
   setStatus();
@@ -274,13 +281,77 @@ function logPage() {
   return root;
 }
 
+
+// ---------- patterns ----------
+const patternChannel = new BroadcastChannel('windas-pattern');
+let patternWin = null;
+/** Show a pattern on the pattern window (opened on the CRT). Also what an external controller (HCFR) calls. */
+function showPattern(spec) {
+  S.spec = { ...DEFAULT_SPEC, ...spec };
+  patternChannel.postMessage({ type: 'pattern', spec: S.spec });
+  S.onSpec?.();
+}
+S.spec = { ...DEFAULT_SPEC };
+
+function patternsPage() {
+  const root = el('div');
+  root.append(el('h1', {}, 'Patterns'), el('p', { class: 'hint' }, 'Open the pattern window on your CRT, then pick or dial in any pattern. HCFR can drive this automatically (see HCFR link).'));
+
+  const note = el('div', { class: 'note' });
+  const screenSel = el('select', { disabled: true }, el('option', {}, 'This display'));
+  let screens = null;
+  const detect = btn('Detect displays', async () => {
+    try {
+      screens = await window.getScreenDetails();
+      screenSel.replaceChildren(...screens.screens.map((s, i) => el('option', { value: i }, `${s.label || 'Display ' + (i + 1)} — ${s.width}×${s.height}${s.isPrimary ? ' (primary)' : ''}`)));
+      screenSel.disabled = false; note.textContent = 'Pick your CRT, then Open pattern window.';
+    } catch (e) { note.textContent = 'Could not list displays (' + e.message + '). You can still drag the pattern window onto the CRT.'; }
+  }, '', { disabled: !('getScreenDetails' in window) });
+  const open = btn('Open pattern window', () => {
+    const s = screens?.screens[Number(screenSel.value) || 0];
+    const f = s ? `popup,left=${s.availLeft},top=${s.availTop},width=${s.availWidth},height=${s.availHeight}` : 'popup,width=900,height=700';
+    patternWin = window.open('pattern.html', 'windas-pattern', f);
+    if (!patternWin) note.textContent = 'The browser blocked the popup — allow popups for this page and try again.';
+    else { note.textContent = 'Click inside the pattern window (or press F) for full screen.'; setTimeout(() => patternChannel.postMessage({ type: 'pattern', spec: S.spec }), 600); }
+  }, 'primary');
+  root.append(el('div', { class: 'card' }, el('h2', {}, 'Pattern window'), el('div', { class: 'row' }, detect, screenSel, open), note));
+
+  const quick = el('div', { class: 'row' }, WINDAS_PATTERNS.map((p) => btn(p.name, () => { showPattern({ ...DEFAULT_SPEC, ...p.spec }); })));
+  root.append(el('div', { class: 'card' }, el('h2', {}, 'WinDAS patterns'), quick));
+
+  const preview = el('canvas', { width: 320, height: 240, style: 'width:100%;max-width:320px;border:1px solid var(--line);border-radius:6px;background:#000' });
+  const ire = el('input', { type: 'range', min: 0, max: 100, step: 1 }), ireNum = el('input', { type: 'number', min: 0, max: 100, style: 'width:78px' });
+  const win = el('input', { type: 'number', min: 1, max: 100, style: 'width:78px' }), bg = el('input', { type: 'number', min: 0, max: 100, style: 'width:78px' });
+  const rgb = el('select', {}, ['RGB', 'R', 'G', 'B', 'RG', 'RB', 'BG'].map((c) => el('option', {}, c)));
+  const kind = el('select', {}, [['field', 'Field / window'], ['crosshatch', 'Crosshatch'], ['hatch43', '4×3 hatch'], ['hatch54', '5×4 hatch'], ['smallhatch', 'Small hatch'], ['grayscale', 'Grayscale steps'], ['checker', 'Checker'], ['dots', 'Dot grid']].map(([v, t]) => el('option', { value: v }, t)));
+  const levels = el('select', {}, [['pc', 'PC levels (0–255)'], ['video', 'Video levels (16–235)']].map(([v, t]) => el('option', { value: v }, t)));
+  const invert = el('input', { type: 'checkbox' });
+  const sync = () => {
+    const s = S.spec; ire.value = ireNum.value = s.ire; win.value = s.window; bg.value = s.bg; rgb.value = s.rgb; kind.value = s.kind; levels.value = s.levels; invert.checked = s.invert;
+    drawPattern(preview.getContext('2d'), preview.width, preview.height, s);
+  };
+  const push = () => showPattern({ kind: kind.value, ire: Number(ireNum.value), window: Number(win.value), bg: Number(bg.value), rgb: rgb.value, invert: invert.checked, levels: levels.value });
+  ire.addEventListener('input', () => { ireNum.value = ire.value; push(); });
+  for (const e of [ireNum, win, bg]) e.addEventListener('change', push);
+  for (const e of [rgb, kind, levels, invert]) e.addEventListener('change', push);
+  S.onSpec = sync; sync();
+  const label = (t, e) => el('label', { style: 'display:flex;flex-direction:column;gap:4px' }, el('span', { class: 'note', style: 'margin:0' }, t), e);
+  root.append(el('div', { class: 'card' }, el('h2', {}, 'Fine control'),
+    el('div', { class: 'row', style: 'align-items:flex-start;gap:24px' }, preview,
+      el('div', { style: 'flex:1;min-width:260px' },
+        el('div', { class: 'row' }, label('Pattern', kind), label('Channels', rgb), label('Levels', levels)),
+        el('div', { class: 'row' }, label('IRE (brightness %)', el('div', { class: 'row', style: 'margin:0' }, btn('−', () => { ireNum.value = Math.max(0, ireNum.value - 1); push(); }), ire, btn('+', () => { ireNum.value = Math.min(100, Number(ireNum.value) + 1); push(); }), ireNum))),
+        el('div', { class: 'row' }, label('Window size %', win), label('Surround IRE', bg), el('label', { style: 'margin-top:18px' }, invert, ' Invert'))))));
+  return root;
+}
+
 // ---------- shell ----------
 function mount(node) { $('#page').replaceChildren(node); }
 function show(page) {
-  if (page !== 'setup' && page !== 'log' && !S.model) page = 'setup';
+  if (!['setup', 'patterns', 'log'].includes(page) && !S.model) page = 'setup';
   S.page = page;
   for (const b of document.querySelectorAll('#nav button')) b.classList.toggle('active', b.dataset.page === page);
-  mount({ setup: setupPage, factory: factoryPage, registers: registersPage, log: logPage }[page]());
+  mount({ setup: setupPage, factory: factoryPage, registers: registersPage, patterns: patternsPage, log: logPage }[page]());
   setStatus();
 }
 document.querySelectorAll('#nav button').forEach((b) => b.addEventListener('click', () => show(b.dataset.page)));

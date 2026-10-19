@@ -81,7 +81,10 @@ export function parseChs(d) {
   const n = Math.min(u16(d, 0x14), 8);
   const sliders = [];
   for (let i = 0; i < n; i++) sliders.push(u16(d, 0x16 + i * 2));
-  return { std: cstr(d, 0), factoryRegisters: sliders };
+  // Session scripts: up to 10 (register id, value) steps run on connect (+0x614/+0x628) and on exit (+0x640/+0x654).
+  const s16 = (o) => { const v = u16(d, o); return v > 32767 ? v - 65536 : v; };
+  const script = (ids, vals) => { const steps = []; for (let i = 0; i < 10 && s16(ids + i * 2) !== 0; i++) steps.push({ id: s16(ids + i * 2) & 0xffff, value: s16(vals + i * 2) }); return steps; };
+  return { std: cstr(d, 0), factoryRegisters: sliders, startScript: script(0x614, 0x628), exitScript: script(0x640, 0x654) };
 }
 
 export function parseStd(d) {
