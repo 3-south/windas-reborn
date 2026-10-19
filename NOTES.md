@@ -45,3 +45,14 @@ Step by Step, Expert (Viewer/Down timing/Timing edit/H+ H- V+ V- HP VP SYNC/Read
 
 ## TODO
 - mdl/chs/std field semantics, .prc format + runner, DCnv, touch up, failure, mdlsel.* obfuscation, VTG patterns.
+
+## Session scripts (chassis +0x614/+0x628 start, +0x640/+0x654 exit; 10 x int16 register id, 10 x int16 value)
+Run on connect/disconnect (e.g. G1 chassis: "Enter Factory=-923, Exit Factory=0, Timer=1, !Key on/off=1" ... exit "!Key on/off=0, Clear Warranty=0, Exit Factory=0, Timer=2").
+"Timer" is a pseudo-register: wait value*100 ms. Value < -900 encodes -(900 + 10*n + next): write; on a bad reply run the next n steps then retry; continue at step `next`.
+
+## HCFR "Raspberry Pi" (PGenerator) generator protocol
+RB8PGenerator.dll exports RB8PG_discovery/connect/get/send/close. Discovery: UDP broadcast "Who is a PGenerator" to port 1977 (any reply = found; the replying IP is used).
+Control: TCP port 85; every message is text + 0x02 0x0D; send() succeeds only on a 4-byte reply ("OK"+02 0D); get() reads "OK:<value>" (NUL terminated by us).
+Messages: CMD:GET_RESOLUTION -> OK:WxH; CMD:GET_GPU_MEMORY -> OK:MB (>=192); RGB=RECTANGLE;w,h;100;fr,fg,fb;br,bg,bb;-1,-1[,dx,dy];
+TESTTEMPLATERAMDISK:HCFR:r,g,b;r,g,b and TESTTEMPLATEDISK:PatternDynamic:r,g,b (geometry from SETCONF ... DRAW=RECTANGLE DIM=w,h); RGB=TEXT/RGB=IMAGE; QUIT.
+HCFR stores its choice as ColorHCFR.ini [Defaults] Generator=Raspberry Pi (the combo-box text).

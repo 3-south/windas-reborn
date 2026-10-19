@@ -1,6 +1,6 @@
 // Test patterns. A "spec" is plain data so it can travel between windows and from an external controller (e.g. HCFR):
 //   { kind, ire, window, bg, rgb, invert, levels }
-//   kind   : 'field' | 'crosshatch' | 'hatch43' | 'hatch54' | 'smallhatch' | 'grayscale' | 'checker' | 'dots'
+//   kind   : 'rgbrect' (raw codes from HCFR: fg/bg [r,g,b], w/h/dx/dy as fractions of the screen) | 'field' | 'crosshatch' | 'hatch43' | 'hatch54' | 'smallhatch' | 'grayscale' | 'checker' | 'dots'
 //   ire    : 0..100 foreground level (field/window/lines)       window : 1..100 (% of screen area; 100 = full field)
 //   bg     : 0..100 surround level for windows/lines            rgb    : 'RGB'|'R'|'G'|'B'|'RG'|'RB'|'BG' channels lit
 //   invert : swap foreground/background                         levels : 'pc' (0-255) | 'video' (16-235)
@@ -50,6 +50,13 @@ export function drawPattern(ctx, w, h, input) {
   const fg = spec.invert ? spec.bg : spec.ire, bg = spec.invert ? spec.ire : spec.bg;
   const s = { ...spec, ire: fg, bg };
   switch (spec.kind) {
+    case 'rgbrect': { // exact 0-255 codes as requested by an external controller (HCFR); no level conversion
+      const c = (v) => `rgb(${v[0]},${v[1]},${v[2]})`;
+      ctx.fillStyle = c(spec.bg ?? [0, 0, 0]); ctx.fillRect(0, 0, w, h);
+      const ww = w * (spec.w ?? 1), hh = h * (spec.h ?? 1);
+      ctx.fillStyle = c(spec.fg ?? [0, 0, 0]); ctx.fillRect((w - ww) / 2 + (spec.dx ?? 0) * w, (h - hh) / 2 + (spec.dy ?? 0) * h, ww, hh);
+      return;
+    }
     case 'crosshatch': return grid(ctx, w, h, 12, 9, s);
     case 'hatch43': return grid(ctx, w, h, 4, 3, s);
     case 'hatch54': return grid(ctx, w, h, 5, 4, s);
@@ -77,4 +84,15 @@ export function drawPattern(ctx, w, h, input) {
       ctx.fillStyle = color(fg, s); ctx.fillRect((w - ww) / 2, (h - hh) / 2, ww, hh);
     }
   }
+}
+
+/** Short human description of a spec, e.g. "RGB 76,76,76 (~30% PC, ~27% video)". */
+export function describeSpec(spec) {
+  if (spec.kind !== 'rgbrect') return spec.kind === 'field' ? `${spec.ire} IRE${spec.window < 100 ? ` ${spec.window}% window` : ''}` : spec.kind;
+  const [r, g, b] = spec.fg, win = spec.w < 1 || spec.h < 1 ? `, ${Math.round(spec.w * spec.h * 100)}% window` : '';
+  if (r === g && g === b) {
+    const pc = Math.round((r / 255) * 100), vid = Math.round(((r - 16) / 219) * 100);
+    return `gray ${r} (~${pc}% PC, ~${Math.max(0, Math.min(100, vid))}% video)${win}`;
+  }
+  return `RGB ${r},${g},${b}${win}`;
 }

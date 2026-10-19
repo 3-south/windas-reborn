@@ -19,6 +19,19 @@ Double-click **WinDAS-Reborn.cmd** (needs Node.js and Edge or Chrome). It starts
 
 Wiring: adapter TXD → monitor RXD, adapter RXD → monitor TXD, GND → GND (5 V not needed). 9600 baud, 8N1.
 
+## HCFR integration (patterns that follow your measurements)
+
+HCFR (Colorimeter 3.5) can drive an external pattern generator. WinDAS Reborn pretends to be one (HCFR's built-in "Raspberry Pi" / PGenerator generator), so when HCFR asks for a 30 IRE gray, a 100% white, a 10% window or a primary colour, it appears on your CRT automatically, drawn exactly as requested.
+
+1. Start the app with **WinDAS-Reborn.cmd**, go to **Patterns**.
+2. Click **Enable HCFR link** (this also opens the pattern window; drag it onto the CRT and click it once for full screen).
+3. With HCFR closed, click **Set HCFR to use this generator** (changes only HCFR's generator choice; your original settings are backed up, and **Undo HCFR setting** restores them).
+4. Click **Launch HCFR**, then in HCFR use **File → New** and start a measurement. The app shows "HCFR asked for: …" live.
+
+Only this machine can talk to the link (other computers are ignored), and it is off until you enable it. It needs the local launcher or the EXE; the online page cannot open ports.
+
+HCFR sends the exact 0–255 codes (it already applies video/PC level scaling), which are shown on the pattern window unchanged. Stored image patterns that HCFR keeps on a real Pi (ramps etc.) are not available and are reported in the status line.
+
 ## Windows EXE
 
 Releases contain a portable `.exe` (the same app in an Electron window). 
@@ -37,7 +50,7 @@ See [NOTES.md](NOTES.md) for the reverse‑engineered file formats and protocol.
 
 ## Status
 
-Working: ECS and ECS2 protocols, all 184 shipped models load, Factory Preset sliders, full register editor, simulator.
+Working: ECS and ECS2 protocols (with the same Enter/Exit Factory handshake WinDAS uses), all 184 shipped models load, Factory Preset sliders, full register editor, simulator, pattern generator window, HCFR integration.
 Not yet ported from the original: the `.prc` adjustment procedures (landing / convergence wizards), DCnv, Touch‑up, Failure, Maintenance (degauss / aging), Save/Load/MPU. Nothing has been verified against a real monitor yet.
 
 ## Legal

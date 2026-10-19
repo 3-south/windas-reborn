@@ -3,7 +3,7 @@ import { Executor, Status } from '../core/executor.js';
 import { RegisterBus } from '../core/bus.js';
 import { SerialLink, SimLink } from '../core/links.js';
 import { runScript } from '../core/session.js';
-import { DEFAULT_SPEC, WINDAS_PATTERNS, drawPattern } from '../core/patterns.js';
+import { DEFAULT_SPEC, WINDAS_PATTERNS, drawPattern, describeSpec } from '../core/patterns.js';
 
 // ---------- tiny helpers ----------
 const $ = (s, r = document) => r.querySelector(s);
@@ -282,6 +282,66 @@ function logPage() {
 }
 
 
+
+// ---------- HCFR link (local launcher only) ----------
+const isLocal = location.hostname === '127.0.0.1';
+S.hcfr = { running: false, clients: 0, last: '', text: '' };
+async function hcfrApi(path, body) {
+  const r = await fetch('/__hcfr/' + path, { method: body ? 'POST' : 'GET', headers: { 'x-windas': '1', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+if (isLocal && 'EventSource' in window) {
+  const es = new EventSource('/__events');
+  es.onmessage = (m) => {
+    const e = JSON.parse(m.data);
+    if (e.type === 'state') { S.hcfr.running = e.running; S.hcfr.clients = e.clients; }
+    else if (e.type === 'pattern') { showPattern(e.spec); S.hcfr.last = describeSpec(e.spec); }
+    else if (e.type === 'text') S.hcfr.text = e.text;
+    else if (e.type === 'image') S.hcfr.last = 'stored image ' + e.path.split('/').pop() + ' (not available here)';
+    else if (e.type === 'quit') S.hcfr.last = 'HCFR disconnected';
+    S.onHcfr?.();
+  };
+}
+
+function hcfrCard(openWindow) {
+  const card = el('div', { class: 'card' });
+  card.append(el('h2', {}, 'HCFR link'));
+  if (!isLocal) {
+    card.append(el('div', { class: 'note' }, 'Needs the local launcher (WinDAS-Reborn.cmd). It lets HCFR drive the pattern window automatically — when HCFR asks for 30 IRE, it appears on the CRT.'));
+    return card;
+  }
+  const state = el('div', { class: 'note' }), asking = el('div', { style: 'font-size:16px;font-weight:600;margin:8px 0' });
+  const note = el('div', { class: 'note' });
+  const toggle = btn('', async () => {
+    try {
+      if (S.hcfr.running) { await hcfrApi('stop', {}); S.hcfr.running = false; S.hcfr.clients = 0; }
+      else {
+        openWindow();                                           // user gesture: lets the browser open the pattern window
+        const dpr = window.devicePixelRatio || 1;
+        await hcfrApi('start', { width: Math.round(screen.width * dpr), height: Math.round(screen.height * dpr) });
+      }
+      note.textContent = '';
+    } catch (e) { note.textContent = e.message; }
+    paint();
+  }, 'primary');
+  const configure = btn('Set HCFR to use this generator', async () => { try { const r = await hcfrApi('configure', { generator: 'Raspberry Pi' }); note.textContent = 'HCFR is now set to “Raspberry Pi” (was: ' + (r.previous || 'unset') + '). Original settings backed up as ' + r.backup.split('\\').pop() + '. Start HCFR to use it.'; } catch (e) { note.textContent = e.message; } });
+  const restore = btn('Undo HCFR setting', async () => { try { await hcfrApi('restore', {}); note.textContent = 'HCFR settings restored to how they were before.'; } catch (e) { note.textContent = e.message; } });
+  const launch = btn('Launch HCFR', async () => { try { const r = await hcfrApi('launch', {}); note.textContent = 'Started ' + r.launched; } catch (e) { note.textContent = e.message; } });
+  const paint = () => {
+    toggle.textContent = S.hcfr.running ? 'Disable HCFR link' : 'Enable HCFR link';
+    state.textContent = !S.hcfr.running ? 'Off.' : S.hcfr.clients ? 'HCFR is connected.' : 'Waiting for HCFR — click “Set HCFR to use this generator” (with HCFR closed), Launch HCFR, then File → New and start a measurement.';
+    asking.textContent = S.hcfr.running && S.hcfr.last ? 'HCFR asked for: ' + S.hcfr.last : '';
+  };
+  S.onHcfr = paint; paint();
+  card.append(
+    el('div', { class: 'row' }, toggle, configure, launch, restore),
+    state, asking, note,
+    el('div', { class: 'note' }, 'How it works: this app pretends to be the Raspberry Pi pattern generator HCFR can use. Each patch HCFR requests (gray levels, primaries, windows) is drawn exactly as requested on the pattern window. The only change to HCFR is its generator choice (backed up; “Undo HCFR setting” puts it back).'));
+  return card;
+}
+
 // ---------- patterns ----------
 const patternChannel = new BroadcastChannel('windas-pattern');
 let patternWin = null;
@@ -292,6 +352,7 @@ function showPattern(spec) {
   S.onSpec?.();
 }
 S.spec = { ...DEFAULT_SPEC };
+window.__S = S; // handy for debugging in the console
 
 function patternsPage() {
   const root = el('div');
@@ -307,15 +368,17 @@ function patternsPage() {
       screenSel.disabled = false; note.textContent = 'Pick your CRT, then Open pattern window.';
     } catch (e) { note.textContent = 'Could not list displays (' + e.message + '). You can still drag the pattern window onto the CRT.'; }
   }, '', { disabled: !('getScreenDetails' in window) });
-  const open = btn('Open pattern window', () => {
+  const openWin = () => {
     const s = screens?.screens[Number(screenSel.value) || 0];
     const f = s ? `popup,left=${s.availLeft},top=${s.availTop},width=${s.availWidth},height=${s.availHeight}` : 'popup,width=900,height=700';
     patternWin = window.open('pattern.html', 'windas-pattern', f);
     if (!patternWin) note.textContent = 'The browser blocked the popup — allow popups for this page and try again.';
     else { note.textContent = 'Click inside the pattern window (or press F) for full screen.'; setTimeout(() => patternChannel.postMessage({ type: 'pattern', spec: S.spec }), 600); }
-  }, 'primary');
+  };
+  const open = btn('Open pattern window', openWin, 'primary');
   root.append(el('div', { class: 'card' }, el('h2', {}, 'Pattern window'), el('div', { class: 'row' }, detect, screenSel, open), note));
 
+  root.append(hcfrCard(openWin));
   const quick = el('div', { class: 'row' }, WINDAS_PATTERNS.map((p) => btn(p.name, () => { showPattern({ ...DEFAULT_SPEC, ...p.spec }); })));
   root.append(el('div', { class: 'card' }, el('h2', {}, 'WinDAS patterns'), quick));
 

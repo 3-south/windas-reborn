@@ -18,8 +18,20 @@
   "build": {
     "appId": "io.github.windas-reborn",
     "productName": "WinDAS Reborn",
-    "files": ["index.html", "src/**/*", "electron/**/*", "package.json"],
-    "win": { "target": "portable", "artifactName": "WinDAS-Reborn-${version}.exe" },
-    "directories": { "output": "dist" }
+    "files": [
+      "index.html",
+      "pattern.html",
+      "serve.js",
+      "src/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "artifactName": "WinDAS-Reborn-${version}.exe"
+    },
+    "directories": {
+      "output": "dist"
+    }
   }
 }
