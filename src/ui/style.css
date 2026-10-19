@@ -38,7 +38,7 @@ button.btn:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 8%,
 button.btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
 button.btn:disabled { opacity: .45; cursor: default; }
 input[type=text], input[type=search], input[type=number], select { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; min-height: 32px; }
-input[type=search] { width: 100%; }
+input[type=search] { flex: 1; min-width: 140px; }
 
 .models { list-style: none; margin: 8px 0 0; padding: 0; max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); }
 .models li { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }

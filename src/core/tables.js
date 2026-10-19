@@ -52,13 +52,17 @@ export function parseEcsTable(d, mode) {
   };
 }
 
+// Brand codes seen in mdlsel.ins. Labels are inferred from the model names in each group (Dell Pxxx, IBM 655x, FMV = Fujitsu, ...).
+const BRANDS = { 1: 'Sony', 4: 'Dell', 5: 'IBM', 6: 'HP / Compaq', 8: 'NEC', 9: 'Fujitsu' };
+
 /** mdlsel.ins: 128-byte records, strings nibble-swapped. */
 export function parseModelList(d) {
   const list = [];
   for (let o = 0; o + 128 <= d.length; o += 128) {
     const name = cstr(d, o, 22, true);
     if (!name) continue;
-    list.push({ name, mdl: cstr(d, o + 0x16, 10, true), base: cstr(d, o + 0x20, 16, true) });
+    const brand = u16(d, o + 0x2a);
+    list.push({ name, mdl: cstr(d, o + 0x16, 10, true), base: cstr(d, o + 0x20, 16, true), brandCode: brand, brand: BRANDS[brand] ?? `Other (${brand})` });
   }
   return list;
 }

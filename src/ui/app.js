@@ -107,15 +107,18 @@ function setupPage() {
   fnote.textContent = S.src ? `${S.folderName} — ${S.models.length} models found. Files are read in your browser only; nothing is uploaded.` : 'Select the original WinDAS folder (the one containing windas.exe and a data folder). It is read locally and never uploaded.';
 
   if (S.src) {
-    const search = el('input', { type: 'search', placeholder: 'Search models, e.g. FW900' });
+    const search = el('input', { type: 'search', placeholder: 'Search, e.g. P1130' });
+    const brands = ['All brands', ...[...new Set(S.models.map((m) => m.brand))].sort((x, y) => (x === 'Sony' ? -1 : y === 'Sony' ? 1 : x.localeCompare(y)))];
+    const brandSel = el('select', {}, brands.map((b) => el('option', {}, b)));
     const list = el('ul', { class: 'models' });
     const note = el('div', { class: 'note' }, S.entry ? `${S.entry.name} loaded · ${S.model.table.registers.length} registers · ${S.model.table.mode === 1 ? 'ECS' : 'ECS2'} protocol` : '');
     const paint = () => {
-      list.replaceChildren(...S.models.filter((m) => m.name.toLowerCase().includes(search.value.trim().toLowerCase())).map((m) =>
-        el('li', { class: S.entry === m ? 'sel' : '', onclick: async () => { try { await selectModel(m); note.textContent = ''; refresh(); } catch (e) { note.textContent = 'Could not load model: ' + e.message; } } }, el('span', {}, m.name), el('small', {}, `${m.mdl}.mdl`))));
+      const q = search.value.trim().toLowerCase(), bf = brandSel.selectedIndex > 0 ? brandSel.value : null;
+      list.replaceChildren(...S.models.filter((m) => (!bf || m.brand === bf) && (!q || `${m.name} ${m.brand}`.toLowerCase().includes(q))).map((m) =>
+        el('li', { class: S.entry === m ? 'sel' : '', onclick: async () => { try { await selectModel(m); note.textContent = ''; refresh(); } catch (e) { note.textContent = 'Could not load model: ' + e.message; } } }, el('span', {}, m.name), el('small', {}, `${m.brand} · ${m.mdl}.mdl`))));
     };
-    search.addEventListener('input', paint); paint();
-    left.append(el('h2', { style: 'margin-top:18px' }, 'Monitor model'), search, list, note);
+    search.addEventListener('input', paint); brandSel.addEventListener('change', paint); paint();
+    left.append(el('h2', { style: 'margin-top:18px' }, 'Monitor model'), el('div', { class: 'row' }, search, brandSel), list, note);
   }
 
   // 2. connection
