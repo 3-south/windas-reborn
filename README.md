@@ -6,7 +6,11 @@ It speaks the same serial protocol as the original, reverse‑engineered from yo
 
 > ⚠️ This writes to a monitor's service registers. Wrong values can leave a CRT mis‑adjusted. Read first, change one thing at a time, and use *Restore*. Use at your own risk.
 
-## Use it (no install)
+## Run it on your PC (recommended)
+
+Double-click **WinDAS-Reborn.cmd** (needs Node.js and Edge or Chrome). It starts a tiny local server and opens the app in its own window; closing the window stops the server. No signing needed, so Smart App Control does not interfere.
+
+## Use it online (no install)
 
 1. Open **https://3-south.github.io/windas-reborn/** in **Microsoft Edge or Google Chrome** (Web Serial is Chromium‑only).
 2. **Setup → Choose WinDAS folder** – pick the original `WINDAS` folder (the one with `windas.exe` and `data\`).

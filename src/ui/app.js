@@ -282,6 +282,9 @@ function show(page) {
 }
 document.querySelectorAll('#nav button').forEach((b) => b.addEventListener('click', () => show(b.dataset.page)));
 
+// Heartbeat for the local launcher (lets serve.js quit when the window closes); harmless elsewhere.
+if (location.hostname === '127.0.0.1') setInterval(() => fetch('/__ping').catch(() => {}), 5000);
+
 (async () => {
   // Dev/test hook (served by serve.js when WINDAS_DIR is set): load a folder over HTTP instead of the picker.
   const q = new URLSearchParams(location.search);
