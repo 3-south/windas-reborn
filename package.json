@@ -1,6 +1,6 @@
 {
   "name": "windas-reborn",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Modern, resizable replacement UI for the Sony WinDAS CRT monitor service tool (Web Serial)",
   "private": true,
   "license": "MIT",
